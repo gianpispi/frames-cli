@@ -113,7 +113,7 @@ class HEVCAlphaTests(unittest.TestCase):
                 self.assertTrue(frames._output_uses_alpha(args))
                 self.assertEqual(frames._video_output_path(self.sources[0], args).suffix, ".mov")
                 self.assertEqual(frames._encoded_video_dimensions(29, 53, args), dimensions)
-                encoder_args, _ = frames._encoder_args(args)
+                encoder_args, _ = frames._encoder_args(args, use_hardware=False)
                 self.assertEqual(encoder_args[encoder_args.index("-c:v") + 1], encoder)
 
     def test_single_and_merged_filters_keep_alpha_and_pad_with_chosen_background(self):
@@ -130,7 +130,7 @@ class HEVCAlphaTests(unittest.TestCase):
                         self.assertRegex(graph, "pad=62:54:0:0:color=" + re.escape(canvas_color) + r"(?=[,;\[])")
                         self.assertNotIn("pad=30:54", graph)
                         self.assertNotIn(",scale=", graph)
-                        self.assertEqual(graph.count("pad="), 1)
+                        self.assertEqual(len(re.findall(r"(?<!t)pad=", graph)), 1)
                     else:
                         self.assertEqual(result["output_dimensions"], "30x54")
                         self.assertRegex(graph, "pad=30:54:0:0:color=" + re.escape(canvas_color) + r"(?=[,;\[])")
@@ -174,7 +174,7 @@ class HEVCAlphaTests(unittest.TestCase):
         self.assertIn("scale=12:21", graph)
         self.assertIn("overlay=32:32:format=auto", graph)
         self.assertIn("pad=44:54", graph)
-        self.assertEqual(graph.count("pad="), 1)
+        self.assertEqual(len(re.findall(r"(?<!t)pad=", graph)), 1)
 
     def test_presets_use_hevc_bitrates_for_single_and_merged_exports(self):
         for merge in (False, True):
