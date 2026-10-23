@@ -50,7 +50,7 @@ class VideoPipelineTests(unittest.TestCase):
             self.assertIn("[2:v]loop=loop=-1:size=1,transpose=2[af0]", graph)
             self.assertIn("[atmp][af0]overlay=0:0", graph)
 
-    def test_merge_tiles_at_merge_rate_and_hardware_encoder_with_fallback(self):
+    def test_merge_tiles_at_merge_rate_with_software_encoder(self):
         items = [{
             "src": Path(f"/tmp/source_{index}.mov"),
             "video_meta": {"duration": 2.0, "audio": False, "fps_rate": "60/1"},
@@ -76,11 +76,6 @@ class VideoPipelineTests(unittest.TestCase):
         self.assertIn("color=c=white:s=1350x2760:r=30:d=2.033333", graph)
         self.assertIn("[f0_framed]format=rgba[f0_out]", graph)
         self.assertEqual(graph.count("format=yuv420p"), 1)
-        self.assertIn("h264_videotoolbox", cmd)
-        self.assertEqual(cmd[cmd.index("-b:v") + 1], str(round(16e6 * 2760 * 2760 * 30 / (1350 * 2760 * 60))))
-        self.assertIn("libx264", fallback)
-
-        cmd, fallback = render(quality=23)
         self.assertIn("libx264", cmd)
         self.assertIsNone(fallback)
 

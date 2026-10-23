@@ -1317,7 +1317,9 @@ def _output_uses_alpha(args):
 
 
 def _video_pixel_format(args):
-    return {"hevc-alpha": "bgra", "prores": "yuva444p10le"}.get(_video_output_codec(args), "yuv420p")
+    # 12-bit matches ProRes 4444 and keeps opaque alpha exact in both ProRes encoders;
+    # prores_videotoolbox turns 10-bit opaque alpha into 99.9%, prores_ks dithers 16-bit.
+    return {"hevc-alpha": "bgra", "prores": "yuva444p12le"}.get(_video_output_codec(args), "yuv420p")
 
 
 def _hevc_alpha_uses_ayuv(args):
@@ -2068,12 +2070,10 @@ def render_merged_video(items, out_path, args, progress_label=None):
         audio_map = ["-an"]
 
     filters.extend(audio_filters)
-    use_hardware = args.quality is None or _video_output_codec(args) == "prores"
+    # Only ProRes merges use hardware. Fixed hardware bitrates made H.264/HEVC merges of
+    # screen recordings 5-9x larger than software CRF for about a second of speedup.
+    use_hardware = _video_output_codec(args) == "prores"
     enc_args, used_hw = _encoder_args(args, use_hardware=use_hardware, prefer_software=not use_hardware)
-    if used_hw and "-b:v" in enc_args:
-        index = enc_args.index("-b:v") + 1
-        scale = max(1.0, width * height * 30 / (1350 * 2760 * 60))
-        enc_args[index] = str(round(float(enc_args[index].rstrip("M")) * 1_000_000 * scale))
 
     def merge_cmd(enc_args):
         return [

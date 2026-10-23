@@ -516,7 +516,7 @@ class VideoHelperTests(unittest.TestCase):
         self.assertIn("color=c=black@0.0", filter_complex)
         self.assertIn("format=rgba", filter_complex)
         self.assertIn("overlay=0:0:format=auto", filter_complex)
-        self.assertIn("format=yuva444p10le[out]", filter_complex)
+        self.assertIn("format=yuva444p12le[out]", filter_complex)
         self.assertIn("prores_videotoolbox", cmd)
         self.assertIn("smpte170m", cmd)
         self.assertIn("prores_ks", fallback)
