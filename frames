@@ -1317,7 +1317,9 @@ def _output_uses_alpha(args):
 
 
 def _video_pixel_format(args):
-    return {"hevc-alpha": "bgra", "prores": "yuva444p10le"}.get(_video_output_codec(args), "yuv420p")
+    # 12-bit matches ProRes 4444 and keeps opaque alpha exact in both ProRes encoders;
+    # prores_videotoolbox turns 10-bit opaque alpha into 99.9%, prores_ks dithers 16-bit.
+    return {"hevc-alpha": "bgra", "prores": "yuva444p12le"}.get(_video_output_codec(args), "yuv420p")
 
 
 def _hevc_alpha_uses_ayuv(args):
@@ -1585,6 +1587,9 @@ def _encoder_args(args, use_hardware=True, prefer_software=False):
             "-allow_sw", "1", "-tag:v", "hvc1", "-b:v", preset["hevc_bitrate"],
         ], False
     if codec == "prores":
+        if sys.platform == "darwin" and use_hardware and not prefer_software and shutil.which("ffmpeg"):
+            return ["-c:v", "prores_videotoolbox", "-profile:v", "4444", "-pix_fmt", "ayuv64le",
+                    "-colorspace", "smpte170m"], True
         return ["-c:v", "prores_ks", "-profile:v", "4", "-pix_fmt", "yuva444p10le"], False
     if codec == "hevc":
         if sys.platform == "darwin" and use_hardware and not prefer_software and shutil.which("ffmpeg"):
@@ -1798,19 +1803,22 @@ def _run_video_export(cmd, out_path, sources, fallback_cmd=None, progress_label=
             staged_path.unlink()
 
 
-def _framed_video_filters(src_path, frame_meta, video_meta, args, input_index=0, prefix="", pad_output=True):
+def _framed_video_filters(src_path, frame_meta, video_meta, args, input_index=0, prefix="", pad_output=True,
+                          merge_fps=None):
     """Build one framed stream for single exports and direct video merges."""
     inputs = ["-i", str(src_path)]
     mask_index = None
     frame_index = input_index + 1
     if frame_meta["mask_path"]:
-        inputs += ["-loop", "1", "-i", frame_meta["mask_path"]]
+        inputs += ["-i", frame_meta["mask_path"]]
         mask_index = input_index + 1
         frame_index = input_index + 2
-    inputs += ["-loop", "1", "-i", frame_meta["frame_path"]]
+    inputs += ["-i", frame_meta["frame_path"]]
 
     filters = []
     source_chain = f"[{input_index}:v]{_video_source_filter(args)}"
+    if merge_fps:
+        source_chain = f"[{input_index}:v]tpad=stop_mode=clone:stop=1,fps={merge_fps},{_video_source_filter(args)}"
     if frame_meta["resize_width"]:
         source_chain += f",scale={frame_meta['resize_width']}:{frame_meta['resize_height']}"
     source_chain += "[v0]"
@@ -1818,7 +1826,7 @@ def _framed_video_filters(src_path, frame_meta, video_meta, args, input_index=0,
 
     video_label = "v0"
     if mask_index is not None:
-        mask_chain = f"[{mask_index}:v]format=gray"
+        mask_chain = f"[{mask_index}:v]{STILL_LOOP},format=gray"
         if frame_meta.get("rotate_mask"):
             mask_chain += "," + VIDEO_ROTATIONS["counterclockwise"]
         if frame_meta["resize_width"]:
@@ -1831,18 +1839,18 @@ def _framed_video_filters(src_path, frame_meta, video_meta, args, input_index=0,
     background = _background_color(_video_background(args))
     canvas = (
         f"color=c={background}:s={frame_meta['frame_width']}x{frame_meta['frame_height']}:"
-        f"r={_normalize_rate(video_meta['fps_rate'])}:d={video_meta['duration']}"
+        f"r={merge_fps or _normalize_rate(video_meta['fps_rate'])}:"
+        f"d={round(video_meta['duration'] + 1 / merge_fps, 6) if merge_fps else video_meta['duration']}"
     )
     canvas += ",format=rgba"
     canvas += "[base]"
     filters.append(canvas)
     overlay_format = ":format=auto"
-    out_format = _video_pixel_format(args)
+    out_format = "rgba" if merge_fps else _video_pixel_format(args)
     filters.append(f"[base][{video_label}]overlay={frame_meta['x']}:{frame_meta['y']}{overlay_format}[tmp]")
-    frame_label = f"{frame_index}:v"
-    if frame_meta.get("rotate_frame"):
-        filters.append(f"[{frame_index}:v]{VIDEO_ROTATIONS['counterclockwise']}[f0]")
-        frame_label = "f0"
+    rotate_frame = "," + VIDEO_ROTATIONS["counterclockwise"] if frame_meta.get("rotate_frame") else ""
+    filters.append(f"[{frame_index}:v]{STILL_LOOP}{rotate_frame}[f0]")
+    frame_label = "f0"
     filters.append(f"[tmp][{frame_label}]overlay=0:0:format=auto[framed]")
     output_filters = []
     pad_filter = _video_pad_filter(frame_meta["frame_width"], frame_meta["frame_height"], args) if pad_output else None
@@ -1851,13 +1859,16 @@ def _framed_video_filters(src_path, frame_meta, video_meta, args, input_index=0,
             output_filters.append("format=bgra")
         output_filters.append(pad_filter)
     # HEVC alpha merge tiles skip padding and stay in the working format until the final canvas.
-    output_filters.append(_encoder_input_filter(args) if pad_output else f"format={out_format}")
+    output_filters.append(_encoder_input_filter(args) if pad_output and not merge_fps else f"format={out_format}")
     filters.append(f"[framed]{','.join(output_filters)}[out]")
 
     if prefix:
         for label in ("v0", "m0", "vm", "base", "tmp", "f0", "framed", "out"):
             filters = [part.replace("[" + label + "]", "[" + prefix + label + "]") for part in filters]
     return inputs, filters, prefix + "out", frame_index + 1
+
+
+STILL_LOOP = "loop=loop=-1:size=1"
 
 
 def render_framed_video(src_path, out_path, frame_meta, video_meta, args, progress_label=None):
@@ -1983,7 +1994,7 @@ def render_merged_video(items, out_path, args, progress_label=None):
         source_indices.append(next_index)
         inputs, frame_filters, label, next_index = _framed_video_filters(
             item["src"], item["frame_meta"], item["video_meta"], args,
-            input_index=next_index, prefix=f"f{idx}_", pad_output=not hevc_alpha,
+            input_index=next_index, prefix=f"f{idx}_", pad_output=not hevc_alpha, merge_fps=30,
         )
         input_args.extend(inputs)
         filters.extend(frame_filters)
@@ -2059,19 +2070,26 @@ def render_merged_video(items, out_path, args, progress_label=None):
         audio_map = ["-an"]
 
     filters.extend(audio_filters)
-    enc_args, _ = _encoder_args(args, use_hardware=False, prefer_software=True)
-    cmd = [
-        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-        *input_args,
-        "-filter_complex", ";".join(filters),
-        *map_args,
-        *audio_map,
-        "-t", f"{total_duration:.6f}",
-        *enc_args,
-        "-movflags", "+faststart",
-        str(out_path),
-    ]
-    _run_video_export(cmd, out_path, [item["src"] for item in items],
+    # Only ProRes merges use hardware. Fixed hardware bitrates made H.264/HEVC merges of
+    # screen recordings 5-9x larger than software CRF for about a second of speedup.
+    use_hardware = _video_output_codec(args) == "prores"
+    enc_args, used_hw = _encoder_args(args, use_hardware=use_hardware, prefer_software=not use_hardware)
+
+    def merge_cmd(enc_args):
+        return [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            *input_args,
+            "-filter_complex", ";".join(filters),
+            *map_args,
+            *audio_map,
+            "-t", f"{total_duration:.6f}",
+            *enc_args,
+            "-movflags", "+faststart",
+            str(out_path),
+        ]
+
+    fallback_cmd = merge_cmd(_encoder_args(args, use_hardware=False, prefer_software=True)[0]) if used_hw else None
+    _run_video_export(merge_cmd(enc_args), out_path, [item["src"] for item in items], fallback_cmd=fallback_cmd,
                       progress_label=progress_label, progress_total=total_duration)
 
     output_width, output_height = _encoded_video_dimensions(width, height, args)

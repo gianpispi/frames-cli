@@ -506,16 +506,21 @@ class VideoHelperTests(unittest.TestCase):
             },
         ]
 
-        with mock.patch.object(frames, "_run_ffmpeg") as run:
+        with mock.patch.object(frames.sys, "platform", "darwin"), \
+                mock.patch.object(frames.shutil, "which", return_value="/usr/bin/ffmpeg"), \
+                mock.patch.object(frames, "_run_ffmpeg") as run:
             frames.render_merged_video(items, Path("/tmp/out.mov"), args)
 
-        cmd = run.call_args.args[0]
+        cmd, fallback = run.call_args.args[0], run.call_args.kwargs["fallback_cmd"]
         filter_complex = cmd[cmd.index("-filter_complex") + 1]
         self.assertIn("color=c=black@0.0", filter_complex)
         self.assertIn("format=rgba", filter_complex)
         self.assertIn("overlay=0:0:format=auto", filter_complex)
-        self.assertIn("format=yuva444p10le[out]", filter_complex)
-        self.assertIn("prores_ks", cmd)
+        self.assertIn("format=yuva444p12le[out]", filter_complex)
+        self.assertIn("prores_videotoolbox", cmd)
+        self.assertIn("smpte170m", cmd)
+        self.assertIn("prores_ks", fallback)
+        self.assertEqual(fallback[fallback.index("-filter_complex") + 1], filter_complex)
 
     def test_single_video_composites_on_rgba_canvas_before_non_alpha_output(self):
         args = Namespace(

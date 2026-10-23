@@ -46,9 +46,38 @@ class VideoPipelineTests(unittest.TestCase):
                 Path("source.mp4"), frame_meta, {"fps_rate": "30/1", "duration": 1.0}, args, prefix="a",
             )
             graph = ";".join(filters)
-            self.assertIn("[1:v]format=gray,transpose=2[am0]", graph)
-            self.assertIn("[2:v]transpose=2[af0]", graph)
+            self.assertIn("[1:v]loop=loop=-1:size=1,format=gray,transpose=2[am0]", graph)
+            self.assertIn("[2:v]loop=loop=-1:size=1,transpose=2[af0]", graph)
             self.assertIn("[atmp][af0]overlay=0:0", graph)
+
+    def test_merge_tiles_at_merge_rate_with_software_encoder(self):
+        items = [{
+            "src": Path(f"/tmp/source_{index}.mov"),
+            "video_meta": {"duration": 2.0, "audio": False, "fps_rate": "60/1"},
+            "frame_meta": {"frame_width": 1350, "frame_height": 2760, "physicalHeight": 149.6,
+                           "mask_path": None, "frame_path": "/tmp/frame.png",
+                           "resize_width": None, "resize_height": None, "x": 0, "y": 0},
+            "info": {},
+        } for index in range(2)]
+
+        def render(**overrides):
+            args = Namespace(**{**dict(spacing=60, no_scale=False, playback_offset=False, strip_audio=True,
+                                       background=None, alpha=False, codec="h264", preset="best",
+                                       quality=None, rotate="none"), **overrides})
+            with mock.patch.object(frames.sys, "platform", "darwin"), \
+                    mock.patch.object(frames.shutil, "which", return_value="/usr/bin/ffmpeg"), \
+                    mock.patch.object(frames, "_run_ffmpeg") as run:
+                frames.render_merged_video(items, Path("/tmp/out.mp4"), args)
+            return run.call_args.args[0], run.call_args.kwargs["fallback_cmd"]
+
+        cmd, fallback = render()
+        graph = cmd[cmd.index("-filter_complex") + 1]
+        self.assertIn("[0:v]tpad=stop_mode=clone:stop=1,fps=30,format=rgba[f0_v0]", graph)
+        self.assertIn("color=c=white:s=1350x2760:r=30:d=2.033333", graph)
+        self.assertIn("[f0_framed]format=rgba[f0_out]", graph)
+        self.assertEqual(graph.count("format=yuv420p"), 1)
+        self.assertIn("libx264", cmd)
+        self.assertIsNone(fallback)
 
     def test_progress_drains_large_stderr_and_retains_error(self):
         # Run in a separate process so a pipe regression fails with a timeout.
