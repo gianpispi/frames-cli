@@ -1054,7 +1054,8 @@ def _run_json_command(cmd):
 
 def _parse_tool_version(tool, output):
     first = (output or "").splitlines()[0] if output else ""
-    match = re.search(r"\bversion\s+([0-9]+)(?:\.([0-9]+))?", first)
+    # Arch builds print "version n9.0.1" (git-describe tags), so allow an "n" prefix.
+    match = re.search(r"\bversion\s+n?([0-9]+)(?:\.([0-9]+))?", first)
     token_match = re.search(r"\bversion\s+(\S+)", first)
     display = token_match.group(1) if token_match else "unknown"
     if not match:

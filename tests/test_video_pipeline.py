@@ -79,6 +79,13 @@ class VideoPipelineTests(unittest.TestCase):
         self.assertIn("libx264", cmd)
         self.assertIsNone(fallback)
 
+    def test_tool_version_accepts_arch_n_prefix(self):
+        for line, expected in (
+            ("ffmpeg version 9.0.2 Copyright (c) 2000-2026 the FFmpeg developers", ((9, 0), "9.0.2")),
+            ("ffmpeg version n9.0.1 Copyright (c) 2000-2026 the FFmpeg developers", ((9, 0), "n9.0.1")),
+        ):
+            self.assertEqual(frames._parse_tool_version("ffmpeg", line), expected)
+
     def test_progress_drains_large_stderr_and_retains_error(self):
         # Run in a separate process so a pipe regression fails with a timeout.
         worker = """
