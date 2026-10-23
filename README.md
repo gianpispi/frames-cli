@@ -327,7 +327,7 @@ frames video -m --playback-offset 1.mp4 2.mp4
 
 With `--playback-offset`, audio is concatenated sequentially and videos without audio contribute silence, unless `--strip-audio` is passed. Simultaneous video merges omit mixed audio in this version.
 
-Transparent merges use ProRes 4444 MOV with `yuva444p10le` pixels by default, or compressed HEVC-alpha MOV with `--codec hevc-alpha` on macOS. Both support simultaneous and sequential playback. Choose a format supported by the app where you will use the merged devices over transparency.
+Transparent merges use ProRes 4444 MOV with `yuva444p12le` pixels by default, or compressed HEVC-alpha MOV with `--codec hevc-alpha` on macOS. Both support simultaneous and sequential playback. Choose a format supported by the app where you will use the merged devices over transparency.
 
 ---
 

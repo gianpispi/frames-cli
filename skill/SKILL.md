@@ -5,7 +5,7 @@ description: Frame screenshots and screen recordings with the `frames` CLI. Use 
 
 # Apple Frames CLI
 
-`frames` 1.5.0 is a single-file Python CLI that applies Apple device bezels to screenshots and videos, auto-detects devices from input dimensions, applies masks when needed, and can merge multiple framed results. Video support uses external `ffmpeg` 5.1+ and `ffprobe` 5.1+ with no extra Python media stack.
+`frames` 1.5.1 is a single-file Python CLI that applies Apple device bezels to screenshots and videos, auto-detects devices from input dimensions, applies masks when needed, and can merge multiple framed results. Video support uses external `ffmpeg` 5.1+ and `ffprobe` 5.1+ with no extra Python media stack.
 
 ## What Agents Should Know
 
@@ -153,7 +153,7 @@ frames setup /path/to/Frames
 - Single-video output preserves audio unless `--strip-audio` is passed. Sequential `--playback-offset` merges concatenate audio and generate silence for inputs without audio. Simultaneous merges omit mixed audio in this version.
 - `--background` accepts only `white`, `black`, `transparent`, or `#RRGGBB`. The default canvas is opaque white, including with `--codec prores`; `--alpha` or `--codec hevc-alpha` changes the default to transparent. `--background transparent` selects ProRes MOV unless `--codec hevc-alpha` is explicit.
 - `--codec h264` is the default. Plain `--codec hevc` selects opaque HEVC MP4. `--codec prores` selects alpha-capable ProRes 4444 MOV; use `--alpha` or `--background transparent` for a transparent canvas. Explicit `--codec hevc-alpha` selects macOS VideoToolbox HEVC-with-alpha MOV, even when combined with `--alpha`. Without explicit `hevc-alpha`, `--alpha` takes precedence over `--codec hevc` and selects ProRes.
-- Use HEVC-alpha for compact delivery to Apple-compatible software that supports HEVC-with-alpha. Use ProRes 4444 (`yuva444p10le`) for editing and compositing. Verify the intended receiving app; HEVC-alpha support is not universal.
+- Use HEVC-alpha for compact delivery to Apple-compatible software that supports HEVC-with-alpha. Use ProRes 4444 (`yuva444p12le`) for editing and compositing. Verify the intended receiving app; HEVC-alpha support is not universal.
 - `--preset compact|balanced|best` controls H.264/HEVC hardware bitrate and software CRF. For HEVC-alpha, these presets set target bitrates of 4M, 7M, and 10M respectively; `best` is the default. Targets are not guaranteed file sizes. ProRes MOV files can be much larger; all presets keep the same ProRes settings.
 - `--quality N` is an expert software H.264/HEVC CRF override; lower is higher quality. HEVC-alpha rejects `--quality`; use `--preset` instead.
 - HEVC-alpha requires macOS and an ffmpeg build with `hevc_videotoolbox`, its `alpha_quality` option, and BGRA input support. The CLI checks these before rendering and reports unsupported configurations without silently falling back to an opaque codec. If unavailable, update ffmpeg or explicitly choose ProRes with `--alpha` and remove `--codec hevc-alpha`. `doctor` checks general video tool readiness; it does not certify HEVC-alpha support.
@@ -236,7 +236,7 @@ frames --merge iphone-18-pro.png duo-outer.png
 
 To capture from the simulator: `xcrun simctl io booted screenshot --display=1` for the outer display and `--display=3` for the inner display. Fold state comes from Device Hub's Closed, Book, and Open buttons. See the repository's `docs/iphone-duo.md` for capture, video, merge, and rebuild details.
 
-The standard v4 asset bundle used by `frames` 1.5.0 includes these primary families:
+The standard v4 asset bundle used by `frames` 1.5.1 includes these primary families:
 
 - iPhone: iPhone Duo (inner and outer displays), iPhone 18 Pro, iPhone 18 Pro Max, iPhone 17, iPhone 17 Pro, iPhone 17 Pro Max, iPhone Air, iPhone 16, iPhone 16 Plus, iPhone 12-13 Pro, iPhone 12-13 Pro Max, iPhone 12-13 mini, iPhone 8 / 2020 SE
 - iPad: iPad mini 2021, iPad 2021, iPad Air 2020, iPad Pro 2018-2021 11-inch, iPad Pro 2018-2021 12.9-inch, iPad Pro 2024 11-inch, iPad Pro 2024 13-inch

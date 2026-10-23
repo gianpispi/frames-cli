@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.5.1 — 2026-10-23
+
+Frames adds Apple device bezels to screenshots and screen recordings from the command line. Version 1.5.1 makes video framing and merges faster and fixes video support on Arch Linux. It uses the same asset pack as 1.5.0, so there is nothing to download after updating the CLI.
+
+### Faster video framing and merges
+
+Thanks to [Finn Voorhees](https://github.com/finnvoor) ([#10](https://github.com/viticci/frames-cli/pull/10)):
+
+- **Bezels and masks are decoded once** per export instead of once per frame. Output frames are unchanged.
+- **Transparent ProRes uses the hardware encoder on macOS.** Macs without a ProRes engine fall back to the software encoder automatically. On an M5 Ultra, a transparent merge of two 4-second iPhone recordings dropped from 12.4s to 3.2s. Opaque pixels stay fully opaque, and hardware-encoded files are tagged with the BT.601 color matrix they already used.
+- **Merges composite each device at 30fps in RGBA**, the merge's own frame rate, instead of compositing at full rate and dropping frames afterwards. A merge of two 11-second recordings went from about 7s to 5.5s with H.264, and from about 8.3s to 6.6s with HEVC.
+
+H.264 and HEVC merges still use the software encoder. The hardware encoder saved about a second but made merged screen recordings 5 to 9 times larger.
+
+### Fixes
+
+- `frames doctor` and `frames video` accept ffmpeg version strings with an `n` prefix, such as `ffmpeg version n9.0.1` on Arch Linux. Before, Frames reported video tools as missing on those systems. Thanks to [guitaripod](https://github.com/guitaripod) for the report ([#9](https://github.com/viticci/frames-cli/issues/9)).
+
 ## 1.5.0 — 2026-09-30
 
 Frames adds Apple device bezels to screenshots and screen recordings from the command line. Version 1.5.0 adds **iPhone 18 Pro, iPhone 18 Pro Max, and iPhone Duo** using Apple's official artwork. The 18 Pro models become the default for their screen sizes, Duo joins the standard asset pack, and merged frames now match real-world proportions more precisely.
