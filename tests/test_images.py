@@ -101,6 +101,26 @@ class ImageTests(unittest.TestCase):
             json_path.write_text(json.dumps({"1125": {"name": "Pack"}}), encoding="utf-8")
             self.assertEqual(frames.load_json(root)["1125"]["name"], "Pack")
 
+    def test_ipad_mini_offsets_correct_only_the_published_values(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "NewFrames.json"
+            devices = {
+                "1488": {"name": "iPad mini 2021 Portrait", "x": "142", "y": "146"},
+                "2266": {"name": "iPad mini 2021 Landscape", "x": "146", "y": "142"},
+            }
+            path.write_text(json.dumps(devices), encoding="utf-8")
+            corrected = frames.load_json(root)
+            self.assertEqual((corrected["1488"]["x"], corrected["1488"]["y"]), ("146", "142"))
+            self.assertEqual((corrected["2266"]["x"], corrected["2266"]["y"]), ("142", "146"))
+
+            # A future corrected pack or a different device must keep its own offsets.
+            corrected["2266"] = {"name": "Other device", "x": "146", "y": "142"}
+            path.write_text(json.dumps(corrected), encoding="utf-8")
+            loaded = frames.load_json(root)
+            self.assertEqual(loaded["1488"], corrected["1488"])
+            self.assertEqual(loaded["2266"], corrected["2266"])
+
     def test_sideways_landscape_frame_and_mask_are_rotated_not_stretched(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
